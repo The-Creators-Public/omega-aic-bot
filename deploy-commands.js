@@ -1,26 +1,36 @@
+// deploy-commands.js
+require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const { REST, Routes } = require('discord.js');
-const { readdirSync } = require('fs');
-const { TOKEN, CLIENT_ID } = require('dotenv').config().parsed;
 
 const commands = [];
-const commandFiles = readdirSync('./commands').filter(file => file.endsWith('.js'));
+const commandsPath = path.join(__dirname, 'commands');
+for (const category of fs.readdirSync(commandsPath)) {
+  const categoryPath = path.join(commandsPath, category);
+  if (!fs.lstatSync(categoryPath).isDirectory()) continue;
 
-for (const file of commandFiles) {
-  const command = require(`./commands/${file}`);
-  commands.push(command.data.toJSON());
+  const files = fs.readdirSync(categoryPath).filter(f => f.endsWith('.js'));
+  for (const file of files) {
+    const { data } = require(path.join(categoryPath, file));
+    commands.push(data.toJSON());
+  }
 }
 
-const rest = new REST({ version: '10' }).setToken(TOKEN);
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 (async () => {
   try {
-    console.log('Deploying commands...');
+    console.log(`Registering ${commands.length} slash commands...`);
     await rest.put(
-      Routes.applicationCommands(CLIENT_ID),
-      { body: commands },
+      Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.GUILD_ID
+      ),
+      { body: commands }
     );
-    console.log('Commands registered.');
+    console.log('✅ Successfully registered commands.');
   } catch (error) {
-    console.error(error);
+    console.error('Error registering commands:', error);
   }
 })();
